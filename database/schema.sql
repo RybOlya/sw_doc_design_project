@@ -1,12 +1,16 @@
-CREATE DATABASE IF NOT EXISTS voting_system;
-
-USE voting_system;
-
 CREATE TABLE IF NOT EXISTS User (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
     password VARCHAR(512) NOT NULL,
     is_admin BOOLEAN DEFAULT FALSE
+);
+
+CREATE TABLE IF NOT EXISTS ElectionPolicy (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    policy_type VARCHAR(50),
+    description TEXT,
+    allow_vote_change BOOLEAN DEFAULT FALSE,
+    max_votes INT DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS Election (
@@ -16,7 +20,7 @@ CREATE TABLE IF NOT EXISTS Election (
     start_date DATETIME,
     end_date DATETIME,
     policy_id INT,
-    level VARCHAR(50)
+    FOREIGN KEY (policy_id) REFERENCES ElectionPolicy(id)
 );
 
 CREATE TABLE IF NOT EXISTS Candidate (
@@ -32,12 +36,6 @@ CREATE TABLE IF NOT EXISTS Vote (
     candidate_id INT,
     election_id INT,
     FOREIGN KEY (user_id) REFERENCES User(id),
-    FOREIGN KEY (candidate_id) REFERENCES Candidate(id),
+    FOREIGN KEY (candidate_id) REFERENCES Candidate(id) ON DELETE CASCADE,
     FOREIGN KEY (election_id) REFERENCES Election(id)
-);
-
-CREATE TABLE IF NOT EXISTS ElectionPolicy (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    policy_type VARCHAR(50),
-    description TEXT
 );
