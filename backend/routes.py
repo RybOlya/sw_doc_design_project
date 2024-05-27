@@ -11,7 +11,8 @@ def register():
     if User.query.filter_by(username=data['username']).first():
         return jsonify({'message': 'User already exists'}), 409
 
-    new_user = User(username=data['username'])
+    print(f"Registering user: {data['username']} with admin status: {data['is_admin']}")
+    new_user = User(username=data['username'], is_admin=data['is_admin'])
     new_user.set_password(data['password'])
     try:
         db.session.add(new_user)
@@ -29,25 +30,27 @@ def login():
     if not user or not user.check_password(data['password']):
         return jsonify({'message': 'Invalid credentials'}), 401
 
-    access_token = create_access_token(identity={'id': user.id, 'username': user.username, 'is_admin': user.is_admin})
+    access_token = create_access_token(identity={'username': user.username, 'is_admin': user.is_admin})
     return jsonify(access_token=access_token)
 
 @api.route('/elections', methods=['GET'])
-@jwt_required()
 def get_elections():
     elections = Election.query.all()
-    output = []
+    result = []
     for election in elections:
         election_data = {
             'id': election.id,
             'name': election.name,
             'description': election.description,
-            'start_date': election.start_date,
-            'end_date': election.end_date,
+            'start_date': election.start_date.strftime('%Y-%m-%d %H:%M:%S'),
+            'end_date': election.end_date.strftime('%Y-%m-%d %H:%M:%S'),
+            'policy_id': election.policy_id,
             'level': election.level
         }
-        output.append(election_data)
-    return jsonify({'elections': output})
+        result.append(election_data)
+    print(result)
+    return jsonify(elections=result)
+
 
 @api.route('/elections/<int:election_id>/candidates', methods=['GET'])
 @jwt_required()
