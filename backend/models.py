@@ -39,7 +39,7 @@ class Vote(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('User.id'))
     candidate_id = db.Column(db.Integer, db.ForeignKey('Candidate.id'))
     election_id = db.Column(db.Integer, db.ForeignKey('Election.id'))
-    __table_args__ = (db.UniqueConstraint('user_id', 'election_id', name='_user_election_uc'),)  # Ensure one vote per user per election
+    __table_args__ = (db.UniqueConstraint('user_id', 'election_id', name='_user_election_uc'),) 
 
 class ElectionPolicy(db.Model):
     __tablename__ = 'ElectionPolicy'
