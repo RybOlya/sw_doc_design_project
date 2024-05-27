@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, current_app
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from models import db, User, Election, Candidate, Vote, ElectionPolicy
 from datetime import datetime
 
@@ -11,7 +11,6 @@ def register():
     if User.query.filter_by(username=data['username']).first():
         return jsonify({'message': 'User already exists'}), 409
 
-    print(f"Registering user: {data['username']} with admin status: {data['is_admin']}")
     new_user = User(username=data['username'], is_admin=data['is_admin'])
     new_user.set_password(data['password'])
     try:
@@ -48,16 +47,7 @@ def get_elections():
             'level': election.level
         }
         result.append(election_data)
-    print(result)
     return jsonify(elections=result)
-
-
-@api.route('/elections/<int:election_id>/candidates', methods=['GET'])
-@jwt_required()
-def get_candidates(election_id):
-    candidates = Candidate.query.filter_by(election_id=election_id).all()
-    output = [{'id': candidate.id, 'name': candidate.name} for candidate in candidates]
-    return jsonify({'candidates': output})
 
 @api.route('/elections', methods=['POST'])
 @jwt_required()
@@ -79,11 +69,74 @@ def create_election():
     db.session.commit()
     return jsonify({'message': 'Election created successfully'})
 
+@api.route('/vote', methods=['POST'])
+@jwt_required()
+def vote():
+    data = request.get_json()
+    user_identity = get_jwt_identity()
+    user = User.query.filter_by(username=user_identity['username']).first()
+    if not user:
+        return jsonify({'message': 'User not found'}), 404
+
+    election_id = data['election_id']
+    election = Election.query.get(election_id)
+    policy = ElectionPolicy.query.get(election.policy_id)
+
+    if not policy.allow_vote_change:
+        existing_vote = Vote.query.filter_by(user_id=user.id, election_id=election_id).first()
+        if existing_vote:
+            return jsonify({'message': 'You have already voted in this election and cannot change your vote.'}), 403
+
+    new_vote = Vote(candidate_id=data['candidate_id'], election_id=election_id, user_id=user.id)
+    db.session.add(new_vote)
+    db.session.commit()
+    return jsonify({'message': 'Vote cast successfully'})
+
+@api.route('/elections/<int:election_id>', methods=['PUT'])
+@jwt_required()
+def update_election(election_id):
+    user_identity = get_jwt_identity()
+    if not user_identity['is_admin']:
+        return jsonify({'message': 'Admin access required'}), 403
+
+    election = Election.query.get_or_404(election_id)
+    data = request.get_json()
+    election.name = data.get('name', election.name)
+    election.description = data.get('description', election.description)
+    election.start_date = data.get('start_date', election.start_date)
+    election.end_date = data.get('end_date', election.end_date)
+    election.policy_id = data.get('policy_id', election.policy_id)
+    db.session.commit()
+    return jsonify({'message': 'Election updated successfully'})
+
+@api.route('/elections/<int:election_id>', methods=['DELETE'])
+@jwt_required()
+def delete_election(election_id):
+    user_identity = get_jwt_identity()
+    if not user_identity['is_admin']:
+        return jsonify({'message': 'Admin access required'}), 403
+
+    election = Election.query.get_or_404(election_id)
+
+    Vote.query.filter_by(election_id=election_id).delete()
+    Candidate.query.filter_by(election_id=election_id).delete()
+    
+    db.session.delete(election)
+    db.session.commit()
+    return jsonify({'message': 'Election deleted successfully'})
+
+@api.route('/elections/<int:election_id>/candidates', methods=['GET'])
+@jwt_required()
+def get_candidates(election_id):
+    candidates = Candidate.query.filter_by(election_id=election_id).all()
+    output = [{'id': candidate.id, 'name': candidate.name} for candidate in candidates]
+    return jsonify({'candidates': output})
+
 @api.route('/elections/<int:election_id>/candidates', methods=['POST'])
 @jwt_required()
 def add_candidate(election_id):
-    user = get_jwt_identity()
-    if not user['is_admin']:
+    user_identity = get_jwt_identity()
+    if not user_identity['is_admin']:
         return jsonify({'message': 'Admin access required'}), 403
 
     data = request.get_json()
@@ -95,42 +148,11 @@ def add_candidate(election_id):
     db.session.commit()
     return jsonify({'message': 'Candidate added successfully'})
 
-@api.route('/elections/<int:election_id>', methods=['PUT'])
-@jwt_required()
-def update_election(election_id):
-    user = get_jwt_identity()
-    if not user['is_admin']:
-        return jsonify({'message': 'Admin access required'}), 403
-
-    data = request.get_json()
-    election = Election.query.get_or_404(election_id)
-    election.name = data.get('name', election.name)
-    election.description = data.get('description', election.description)
-    election.start_date = datetime.strptime(data.get('start_date', election.start_date.strftime('%Y-%m-%d')), '%Y-%m-%d')
-    election.end_date = datetime.strptime(data.get('end_date', election.end_date.strftime('%Y-%m-%d')), '%Y-%m-%d')
-    election.policy_id = data.get('policy_id', election.policy_id)
-    election.level = data.get('level', election.level)
-
-    db.session.commit()
-    return jsonify({'message': 'Election updated successfully'})
-
-@api.route('/elections/<int:election_id>', methods=['DELETE'])
-@jwt_required()
-def delete_election(election_id):
-    user = get_jwt_identity()
-    if not user['is_admin']:
-        return jsonify({'message': 'Admin access required'}), 403
-
-    election = Election.query.get_or_404(election_id)
-    db.session.delete(election)
-    db.session.commit()
-    return jsonify({'message': 'Election deleted successfully'})
-
 @api.route('/elections/<int:election_id>/candidates/<int:candidate_id>', methods=['PUT'])
 @jwt_required()
 def update_candidate(election_id, candidate_id):
-    user = get_jwt_identity()
-    if not user['is_admin']:
+    user_identity = get_jwt_identity()
+    if not user_identity['is_admin']:
         return jsonify({'message': 'Admin access required'}), 403
 
     candidate = Candidate.query.get_or_404(candidate_id)
@@ -142,8 +164,8 @@ def update_candidate(election_id, candidate_id):
 @api.route('/elections/<int:election_id>/candidates/<int:candidate_id>', methods=['DELETE'])
 @jwt_required()
 def delete_candidate(election_id, candidate_id):
-    user = get_jwt_identity()
-    if not user['is_admin']:
+    user_identity = get_jwt_identity()
+    if not user_identity['is_admin']:
         return jsonify({'message': 'Admin access required'}), 403
 
     candidate = Candidate.query.get_or_404(candidate_id)
@@ -151,25 +173,6 @@ def delete_candidate(election_id, candidate_id):
     db.session.commit()
     return jsonify({'message': 'Candidate deleted successfully'})
 
-@api.route('/vote', methods=['POST'])
-@jwt_required()
-def vote():
-    data = request.get_json()
-    user_id = get_jwt_identity()['id']
-    election_id = data['election_id']
-
-    election = Election.query.get(election_id)
-    policy = ElectionPolicy.query.get(election.policy_id)
-
-    if not policy.allow_vote_change:
-        existing_vote = Vote.query.filter_by(user_id=user_id, election_id=election_id).first()
-        if existing_vote:
-            return jsonify({'message': 'You have already voted in this election and cannot change your vote.'}), 403
-
-    new_vote = Vote(candidate_id=data['candidate_id'], election_id=election_id)
-    db.session.add(new_vote)
-    db.session.commit()
-    return jsonify({'message': 'Vote cast successfully'})
 
 @api.route('/results/<int:election_id>', methods=['GET'])
 @jwt_required()
@@ -177,6 +180,74 @@ def get_results(election_id):
     results = db.session.query(Candidate.name, db.func.count(Vote.id).label('votes')).join(Vote).filter(Vote.election_id == election_id).group_by(Candidate.name).all()
     output = [{'candidate': row[0], 'votes': row[1]} for row in results]
     return jsonify({'results': output})
+
+@api.route('/elections/<int:election_id>/user_votes', methods=['GET'])
+@jwt_required()
+def get_user_votes(election_id):
+    user_identity = get_jwt_identity()
+    user = User.query.filter_by(username=user_identity['username']).first()
+    if not user:
+        return jsonify({'message': 'User not found'}), 404
+
+    votes = Vote.query.filter_by(user_id=user.id, election_id=election_id).all()
+    output = [{'id': vote.candidate.id, 'name': vote.candidate.name} for vote in votes]
+    return jsonify({'votes': output})
+
+@api.route('/policies', methods=['GET'])
+@jwt_required()
+def get_policies():
+    print("Received request for policies")
+    try:
+        policies = ElectionPolicy.query.all()
+        output = [{'id': policy.id, 'policy_type': policy.policy_type, 'description': policy.description} for policy in policies]
+        print(f"Policies fetched: {output}")
+        return jsonify({'policies': output})
+    except Exception as e:
+        print(f"Error fetching policies: {e}")
+        return jsonify({'message': 'Error fetching policies'}), 500
+
+@api.route('/policies', methods=['POST'])
+@jwt_required()
+def add_policy():
+    user_identity = get_jwt_identity()
+    if not user_identity.get('is_admin'):
+        return jsonify({'message': 'Admin access required'}), 403
+
+    data = request.get_json()
+    new_policy = ElectionPolicy(
+        policy_type=data['policy_type'],
+        description=data['description']
+    )
+    db.session.add(new_policy)
+    db.session.commit()
+    return jsonify({'message': 'Policy added successfully', 'policy': {'id': new_policy.id, 'policy_type': new_policy.policy_type, 'description': new_policy.description}})
+
+@api.route('/policies/<int:policy_id>', methods=['PUT'])
+@jwt_required()
+def update_policy(policy_id):
+    user_identity = get_jwt_identity()
+    if not user_identity.get('is_admin'):
+        return jsonify({'message': 'Admin access required'}), 403
+
+    policy = ElectionPolicy.query.get_or_404(policy_id)
+    data = request.get_json()
+    policy.policy_type = data.get('policy_type', policy.policy_type)
+    policy.description = data.get('description', policy.description)
+    db.session.commit()
+    return jsonify({'message': 'Policy updated successfully', 'policy': {'id': policy.id, 'policy_type': policy.policy_type, 'description': policy.description}})
+
+@api.route('/policies/<int:policy_id>', methods=['DELETE'])
+@jwt_required()
+def delete_policy(policy_id):
+    user_identity = get_jwt_identity()
+    if not user_identity.get('is_admin'):
+        return jsonify({'message': 'Admin access required'}), 403
+
+    policy = ElectionPolicy.query.get_or_404(policy_id)
+    db.session.delete(policy)
+    db.session.commit()
+    return jsonify({'message': 'Policy deleted successfully'})
+
 
 def register_blueprints(app):
     app.register_blueprint(api, url_prefix='/api')
