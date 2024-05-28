@@ -82,10 +82,14 @@ def vote():
     election = Election.query.get(election_id)
     policy = ElectionPolicy.query.get(election.policy_id)
 
-    if not policy.allow_vote_change:
-        existing_vote = Vote.query.filter_by(user_id=user.id, election_id=election_id).first()
-        if existing_vote:
+    existing_vote = Vote.query.filter_by(user_id=user.id, election_id=election_id).first()
+
+    if existing_vote:
+        if not policy.allow_vote_change:
             return jsonify({'message': 'You have already voted in this election and cannot change your vote.'}), 403
+        existing_vote.candidate_id = data['candidate_id']
+        db.session.commit()
+        return jsonify({'message': 'Vote updated successfully'})
 
     new_vote = Vote(candidate_id=data['candidate_id'], election_id=election_id, user_id=user.id)
     db.session.add(new_vote)
@@ -118,13 +122,18 @@ def update_election(election_id):
 
     election = Election.query.get_or_404(election_id)
     data = request.get_json()
-    election.name = data.get('name', election.name)
-    election.description = data.get('description', election.description)
-    election.start_date = datetime.strptime(data.get('start_date'), '%Y-%m-%dT%H:%M')
-    election.end_date = datetime.strptime(data.get('end_date'), '%Y-%m-%dT%H:%M')
-    election.policy_id = data.get('policy_id', election.policy_id)
-    db.session.commit()
-    return jsonify({'message': 'Election updated successfully'})
+    
+    try:
+        election.name = data.get('name', election.name)
+        election.description = data.get('description', election.description)
+        election.start_date = datetime.strptime(data['start_date'].replace(':00.000Z', ''), '%Y-%m-%dT%H:%M')
+        election.end_date = datetime.strptime(data['end_date'].replace(':00.000Z', ''), '%Y-%m-%dT%H:%M')
+        election.policy_id = data.get('policy_id', election.policy_id)
+        db.session.commit()
+        return jsonify({'message': 'Election updated successfully'})
+    except ValueError as e:
+        return jsonify({'error': 'Invalid date format. Please use YYYY-MM-DDTHH:MM format.'}), 400
+
 
 @api.route('/elections/<int:election_id>', methods=['DELETE'])
 @jwt_required()
@@ -232,11 +241,13 @@ def add_policy():
     data = request.get_json()
     new_policy = ElectionPolicy(
         policy_type=data['policy_type'],
-        description=data['description']
+        description=data['description'],
+        allow_vote_change=data.get('allow_vote_change', False),
+        max_votes=data.get('max_votes', 1)
     )
     db.session.add(new_policy)
     db.session.commit()
-    return jsonify({'message': 'Policy added successfully', 'policy': {'id': new_policy.id, 'policy_type': new_policy.policy_type, 'description': new_policy.description}})
+    return jsonify({'message': 'Policy added successfully', 'policy': {'id': new_policy.id, 'policy_type': new_policy.policy_type, 'description': new_policy.description, 'allow_vote_change': new_policy.allow_vote_change, 'max_votes': new_policy.max_votes}})
 
 @api.route('/policies/<int:policy_id>', methods=['PUT'])
 @jwt_required()

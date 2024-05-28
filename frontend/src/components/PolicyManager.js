@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
 import { Modal, Button, Form, Alert } from 'react-bootstrap';
 
-function PolicyManager({ show, handleClose, fetchPolicies }) {
+function PolicyManager({ show, handleClose, onSuccess }) {
   const [policyType, setPolicyType] = useState('');
   const [description, setDescription] = useState('');
   const [allowVoteChange, setAllowVoteChange] = useState(false);
@@ -15,17 +15,17 @@ function PolicyManager({ show, handleClose, fetchPolicies }) {
 
     try {
       const token = localStorage.getItem('token');
-      await axios.post(
+      const response = await axios.post(
         'http://localhost:5000/api/policies',
         {
           policy_type: policyType,
-          description: description,
+          description,
           allow_vote_change: allowVoteChange,
           max_votes: maxVotes
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      fetchPolicies();
+      onSuccess(response.data.policy);
       handleClose();
     } catch (err) {
       setError('Failed to create policy. Please try again.');

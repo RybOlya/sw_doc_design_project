@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Form, Button, Alert, Container, Row, Col, Modal, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { Form, Button, Alert, Container, Row, Col, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
-import PolicyManager from './PolicyManager';
 
 function CreateElection() {
   const [name, setName] = useState('');
@@ -14,7 +13,10 @@ function CreateElection() {
   const [policies, setPolicies] = useState([]);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  const [showPolicyModal, setShowPolicyModal] = useState(false);
+  const [showPolicyForm, setShowPolicyForm] = useState(false);
+  const [newPolicyType, setNewPolicyType] = useState('');
+  const [newPolicyDescription, setNewPolicyDescription] = useState('');
+  const [allowVoteChange, setAllowVoteChange] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -52,13 +54,26 @@ function CreateElection() {
     }
   };
 
-  const handlePolicyModalClose = () => setShowPolicyModal(false);
-  const handlePolicyModalShow = () => setShowPolicyModal(true);
+  const handleAddPolicy = async (e) => {
+    e.preventDefault();
+    setError(null);
 
-  const handlePolicySuccess = (newPolicy) => {
-    setPolicies([...policies, newPolicy]);
-    setPolicyId(newPolicy.id);
-    setShowPolicyModal(false);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(
+        'http://localhost:5000/api/policies',
+        { policy_type: newPolicyType, description: newPolicyDescription, allow_vote_change: allowVoteChange },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setPolicies([...policies, response.data.policy]);
+      setPolicyId(response.data.policy.id);
+      setShowPolicyForm(false);
+      setNewPolicyType('');
+      setNewPolicyDescription('');
+      setAllowVoteChange(false);
+    } catch (err) {
+      setError('Failed to add policy. Please try again.');
+    }
   };
 
   return (
@@ -116,7 +131,7 @@ function CreateElection() {
                   value={policyId}
                   onChange={(e) => {
                     if (e.target.value === 'add-new') {
-                      handlePolicyModalShow();
+                      setShowPolicyForm(true);
                     } else {
                       setPolicyId(e.target.value);
                     }
@@ -144,9 +159,45 @@ function CreateElection() {
               Create Election
             </Button>
           </Form>
-          <Modal show={showPolicyModal} onHide={handlePolicyModalClose}>
-            <PolicyManager onClose={handlePolicyModalClose} onSuccess={handlePolicySuccess} />
-          </Modal>
+          {showPolicyForm && (
+            <div className="mt-5">
+              <h3>Add New Policy</h3>
+              <Form onSubmit={handleAddPolicy}>
+                <Form.Group controlId="newPolicyType">
+                  <Form.Label>Policy Type</Form.Label>
+                  <Form.Control
+                    type="text"
+                    value={newPolicyType}
+                    onChange={(e) => setNewPolicyType(e.target.value)}
+                    required
+                  />
+                </Form.Group>
+                <Form.Group controlId="newPolicyDescription" className="mt-2">
+                  <Form.Label>Description</Form.Label>
+                  <Form.Control
+                    type="text"
+                    value={newPolicyDescription}
+                    onChange={(e) => setNewPolicyDescription(e.target.value)}
+                    required
+                  />
+                </Form.Group>
+                <Form.Group controlId="allowVoteChange" className="mt-2">
+                  <Form.Check
+                    type="checkbox"
+                    label="Allow Vote Change"
+                    checked={allowVoteChange}
+                    onChange={(e) => setAllowVoteChange(e.target.checked)}
+                  />
+                </Form.Group>
+                <Button variant="primary" type="submit" className="mt-3">
+                  Add Policy
+                </Button>
+                <Button variant="secondary" className="mt-3" onClick={() => setShowPolicyForm(false)}>
+                  Cancel
+                </Button>
+              </Form>
+            </div>
+          )}
         </Col>
       </Row>
     </Container>
