@@ -1,0 +1,30 @@
+body {
+  background-color: #f8f9fa;
+}
+
+.container {
+  padding: 20px;
+}
+
+h2 {
+  color: #007bff;
+}
+
+form {
+  background: #ffffff;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+button {
+  width: 100%;
+}
+
+.table-center td, .table-center th {
+  text-align: center;
+  vertical-align: middle;
+}
+.button-horison {
+  display: inline-block;
+}

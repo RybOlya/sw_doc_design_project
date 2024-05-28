@@ -60,8 +60,8 @@ def create_election():
     new_election = Election(
         name=data['name'],
         description=data['description'],
-        start_date=datetime.strptime(data['start_date'], '%Y-%m-%d'),
-        end_date=datetime.strptime(data['end_date'], '%Y-%m-%d'),
+        start_date=datetime.strptime(data['start_date'], '%Y-%m-%dT%H:%M'),
+        end_date=datetime.strptime(data['end_date'], '%Y-%m-%dT%H:%M'),
         policy_id=data['policy_id'],
         level=data['level']
     )
@@ -92,6 +92,23 @@ def vote():
     db.session.commit()
     return jsonify({'message': 'Vote cast successfully'})
 
+@api.route('/elections/<int:election_id>', methods=['GET'])
+@jwt_required()
+def get_election(election_id):
+    election = Election.query.get_or_404(election_id)
+    candidates = Candidate.query.filter_by(election_id=election_id).all()
+    election_data = {
+        'id': election.id,
+        'name': election.name,
+        'description': election.description,
+        'start_date': election.start_date.strftime('%Y-%m-%d %H:%M:%S'),
+        'end_date': election.end_date.strftime('%Y-%m-%d %H:%M:%S'),
+        'policy_id': election.policy_id,
+        'level': election.level,
+        'candidates': [{'id': candidate.id, 'name': candidate.name, 'vote_count': Vote.query.filter_by(candidate_id=candidate.id).count()} for candidate in candidates]
+    }
+    return jsonify({'election': election_data})
+
 @api.route('/elections/<int:election_id>', methods=['PUT'])
 @jwt_required()
 def update_election(election_id):
@@ -103,8 +120,8 @@ def update_election(election_id):
     data = request.get_json()
     election.name = data.get('name', election.name)
     election.description = data.get('description', election.description)
-    election.start_date = data.get('start_date', election.start_date)
-    election.end_date = data.get('end_date', election.end_date)
+    election.start_date = datetime.strptime(data.get('start_date'), '%Y-%m-%dT%H:%M')
+    election.end_date = datetime.strptime(data.get('end_date'), '%Y-%m-%dT%H:%M')
     election.policy_id = data.get('policy_id', election.policy_id)
     db.session.commit()
     return jsonify({'message': 'Election updated successfully'})
@@ -129,7 +146,7 @@ def delete_election(election_id):
 @jwt_required()
 def get_candidates(election_id):
     candidates = Candidate.query.filter_by(election_id=election_id).all()
-    output = [{'id': candidate.id, 'name': candidate.name} for candidate in candidates]
+    output = [{'id': candidate.id, 'name': candidate.name, 'vote_count': Vote.query.filter_by(candidate_id=candidate.id).count()} for candidate in candidates]
     return jsonify({'candidates': output})
 
 @api.route('/elections/<int:election_id>/candidates', methods=['POST'])
@@ -172,7 +189,6 @@ def delete_candidate(election_id, candidate_id):
     db.session.delete(candidate)
     db.session.commit()
     return jsonify({'message': 'Candidate deleted successfully'})
-
 
 @api.route('/results/<int:election_id>', methods=['GET'])
 @jwt_required()
@@ -248,6 +264,23 @@ def delete_policy(policy_id):
     db.session.commit()
     return jsonify({'message': 'Policy deleted successfully'})
 
+@api.route('/user/elections', methods=['GET'])
+@jwt_required()
+def get_user_elections():
+    elections = Election.query.all()
+    result = []
+    for election in elections:
+        election_data = {
+            'id': election.id,
+            'name': election.name,
+            'description': election.description,
+            'start_date': election.start_date.strftime('%Y-%m-%d %H:%M:%S'),
+            'end_date': election.end_date.strftime('%Y-%m-%d %H:%M:%S'),
+            'policy_id': election.policy_id,
+            'level': election.level
+        }
+        result.append(election_data)
+    return jsonify(elections=result)
 
 def register_blueprints(app):
     app.register_blueprint(api, url_prefix='/api')

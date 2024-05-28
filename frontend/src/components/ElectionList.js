@@ -74,11 +74,11 @@ function ElectionList() {
               <td>{election.end_date}</td>
               <td>{election.policy_id}</td>
               <td>{election.level}</td>
-              <td>
-                <Button variant="warning" className="mr-2" onClick={() => handleEditElection(election.id)}>
+              <td style={{ display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
+                <Button variant="link" className="mr-2" onClick={() => handleEditElection(election.id)}>
                   <EditOutlined />
                 </Button>
-                <Button variant="danger" onClick={() => openDeleteModal(election)}>
+                <Button variant="link" onClick={() => openDeleteModal(election)}>
                   <DeleteOutlined />
                 </Button>
               </td>

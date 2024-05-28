@@ -44,7 +44,7 @@ class Vote(db.Model):
 class ElectionPolicy(db.Model):
     __tablename__ = 'ElectionPolicy'
     id = db.Column(db.Integer, primary_key=True)
-    policy_type = db.Column(db.String(50))
-    description = db.Column(db.Text)
+    policy_type = db.Column(db.String(50), nullable=False)
+    description = db.Column(db.Text, nullable=False)
     allow_vote_change = db.Column(db.Boolean, default=False)
     max_votes = db.Column(db.Integer, default=1)
